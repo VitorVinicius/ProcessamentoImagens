@@ -1,4 +1,7 @@
-﻿using System;
+﻿//NOME:   Vitor Vinicius Gomes da Silva
+//RA:     1581775
+//TRABALHO PRÁTICO 1 - Imprementações no arquivo PDI.cs
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,7 +19,7 @@ namespace PrimeiroTrabalhoPDI
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new Form1());
+            Application.Run(new PDI());
         }
     }
 }
