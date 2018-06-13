@@ -400,6 +400,7 @@ namespace PrimeiroTrabalhoPDI
             this.multiplasImagensEmARFFToolStripMenuItem.Name = "multiplasImagensEmARFFToolStripMenuItem";
             this.multiplasImagensEmARFFToolStripMenuItem.Size = new System.Drawing.Size(326, 22);
             this.multiplasImagensEmARFFToolStripMenuItem.Text = "Multiplas Imagens (BIC em ARFF)";
+            this.multiplasImagensEmARFFToolStripMenuItem.Click += new System.EventHandler(this.multiplasImagensEmARFFToolStripMenuItem_Click);
             // 
             // bicToolStripMenuItem
             // 

@@ -1089,6 +1089,21 @@ namespace PrimeiroTrabalhoPDI
             }
             return imgResult;
         }
+        private Mat ThresholdingNonBinary(Mat cinza, int limiar)
+        {
+            Mat copy = cinza.Clone();
+            Mat imgResult = cinza.Clone();
+
+            for (int x = 0; x < copy.Rows; x++)
+            {
+                for (int y = 0; y < copy.Cols; y++)
+                {
+                    var pixelValue = copy.At<byte>(x, y);
+                    imgResult.Set<byte>(x, y, (byte)(pixelValue >= limiar ? pixelValue : 0));
+                }
+            }
+            return imgResult;
+        }
 
         private void imagemAtualToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -1245,9 +1260,14 @@ namespace PrimeiroTrabalhoPDI
 
             if (openFile.ShowDialog() == DialogResult.OK)
             {
-                List<string> codigos = new List<string>();
+                //List<string> codigos = new List<string>();
+                List<KeyValuePair<List<int>, string>> codigos = new List<KeyValuePair<List<int>, string>>();
                 int limiar = GetLimiarValue();
                 List<string> classes = new List<string>();
+                List<List<int>> listaCodigos = new List<List<int>>();
+
+
+
                 foreach (var imagePath in openFile.FileNames)
                 {
 
@@ -1265,7 +1285,7 @@ namespace PrimeiroTrabalhoPDI
                     Point[] maiorContorno = contornos.OrderByDescending(x => x.Length).First();
 
                     List<int> cadeia = CodigoCadeia(maiorContorno);
-
+                    listaCodigos.Add(cadeia);
                     int pFrom = imagePath.IndexOf("_") + "_".Length;
                     int pTo = imagePath.LastIndexOf(".");
 
@@ -1273,7 +1293,7 @@ namespace PrimeiroTrabalhoPDI
                     if(!classes.Contains(classe))
                         classes.Add(classe);
                     
-                    codigos.Add(string.Join("", cadeia) + ", " + classe);
+                    codigos.Add(new KeyValuePair<List<int>, string>(cadeia, classe));
                 }
                 SaveFileDialog saveDialog = new SaveFileDialog();
                 InputDialog input = new InputDialog("Informe o nome da relação que será criada:");
@@ -1299,13 +1319,33 @@ namespace PrimeiroTrabalhoPDI
                 saveDialog.FileName = relacao + ".ARFF";
                 if (saveDialog.ShowDialog() == DialogResult.OK)
                 {
-                    String cabecalho = "@RELATION "+relacao+ "\r\n\r\n   @ATTRIBUTE codigo  STRING\r\n\r\n   @ATTRIBUTE class        {"+string.Join(",", classes) +"}\n\n @DATA";
+                    String cabecalho = "@RELATION " + relacao;
+
+                    
+
+                    for(int i=0; i< 8; i++)
+                    {
+                        cabecalho += "\r\n\r\n   @ATTRIBUTE n"+i+"  NUMERIC";
+                    }
+
+
+                    cabecalho+= "\r\n\r\n   @ATTRIBUTE class        {"+string.Join(",", classes) +"}\n\n @DATA";
                     File.WriteAllText(saveDialog.FileName,cabecalho);
                     foreach(var linha in codigos)
                     {
-                       
+
+                        int[] hist = new int[8];
+
+                        foreach(var value in linha.Key)
+                        {
+                            hist[value] += 1;
+                        }
+
+
+                        string codigo = string.Join(",", hist);
+
                         
-                        File.AppendAllText(saveDialog.FileName,"\n" + linha);
+                        File.AppendAllText(saveDialog.FileName,"\n" + codigo+","+ linha.Value);
                     }
                 }
             }
@@ -1316,7 +1356,7 @@ namespace PrimeiroTrabalhoPDI
             var newImage = greyImage.Clone();
             byte[] histInterior, histBorda;
             List<byte> histogramaSaida;
-            BIC(newImage, out histInterior, out histBorda, out histogramaSaida);
+            BIC(ref newImage, out histInterior, out histBorda, out histogramaSaida, GetLimiarValue());
 
             string saidaTexto = string.Join(",", histogramaSaida);
             Clipboard.SetText(saidaTexto);
@@ -1334,8 +1374,16 @@ namespace PrimeiroTrabalhoPDI
             pictureBox3.Image = newImage.ToBitmap();
         }
 
-        private static void BIC(Mat newImage, out byte[] histInterior, out byte[] histBorda, out List<byte> histogramaSaida)
+        private void BIC(ref Mat newImage, out byte[] histInterior, out byte[] histBorda, out List<byte> histogramaSaida, int? limiar)
         {
+
+            if(limiar == null)
+            {
+                limiar = GetLimiarValue();
+            }
+
+            newImage = this.ThresholdingNonBinary(newImage, limiar.Value);
+
             histInterior = new byte[64];
             histBorda = new byte[64];
 
@@ -1400,6 +1448,88 @@ namespace PrimeiroTrabalhoPDI
         {
             pictureBox3.Image?.Save("temp.jpg", System.Drawing.Imaging.ImageFormat.Jpeg);
             abrirImagem("temp.jpg");
+        }
+
+        private void multiplasImagensEmARFFToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+
+            OpenFileDialog openFile = new OpenFileDialog();
+            var codecs = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders();
+            var codecFilter = "Image Files|";
+            foreach (var codec in codecs)
+            {
+                codecFilter += "*_" + codec.FilenameExtension + ";";
+            }
+            openFile.Filter = codecFilter;
+
+            openFile.Multiselect = true;
+
+            if (openFile.ShowDialog() == DialogResult.OK)
+            {
+                List<string> codigos = new List<string>();
+                List<string> classes = new List<string>();
+                int limiar = GetLimiarValue(); ;
+                foreach (var imagePath in openFile.FileNames)
+                {
+
+                    Mat imagem = new Mat(imagePath);
+
+                    Mat cinza = imagem.CvtColor(ColorConversionCodes.BGR2GRAY);
+
+
+                    byte[] histInt;
+                    byte[] histExt;
+                    List<byte> histSaida = null;
+                    BIC(ref cinza, out histInt, out histExt, out histSaida, limiar);
+
+                    int pFrom = imagePath.IndexOf("_") + "_".Length;
+                    int pTo = imagePath.LastIndexOf(".");
+
+                    string classe = imagePath.Substring(pFrom, pTo - pFrom);
+                    if (!classes.Contains(classe))
+                        classes.Add(classe);
+
+                    codigos.Add(string.Join(",", histSaida) + ", " + classe);
+                }
+                SaveFileDialog saveDialog = new SaveFileDialog();
+                InputDialog input = new InputDialog("Informe o nome da relação que será criada:");
+                string relacao = null;
+                if (input.ShowDialog() == DialogResult.OK)
+                {
+
+                    relacao = (input.Value);
+                }
+                if (string.IsNullOrEmpty(relacao))
+                {
+                    MessageBox.Show("O nome da relacao é obrigatório.", "", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+
+
+                if (string.IsNullOrEmpty(relacao))
+                {
+                    MessageBox.Show("O nome da classe é obrigatório.", "", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    return;
+                }
+
+                saveDialog.FileName = relacao + ".ARFF";
+                if (saveDialog.ShowDialog() == DialogResult.OK)
+                {
+                    String cabecalho = "@RELATION " + relacao ;
+
+                    for(int i =0; i < 128; i++)
+                    {
+                        cabecalho+="\r\n\r\n   @ATTRIBUTE n" + i + "  NUMERIC";
+                    }
+
+                    cabecalho+="\r\n\r\n   @ATTRIBUTE class        {" + string.Join(",", classes) + "}\n\n @DATA";
+                    File.WriteAllText(saveDialog.FileName, cabecalho);
+                    foreach (var linha in codigos)
+                    {
+                        File.AppendAllText(saveDialog.FileName, "\n" + linha);
+                    }
+                }
+            }
         }
     }
 }
